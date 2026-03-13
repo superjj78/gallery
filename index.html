@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나만의 폴더별 사진 공간 (저장 기능)</title>
+    <style>
+        body {
+            font-family: 'Malgun Gothic', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            padding: 40px 20px;
+            margin: 0;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header h1 {
+            margin-bottom: 10px;
+            color: #1a1a1a;
+        }
+        .warning-text {
+            color: #d9534f;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        /* 폴더 생성 영역 디자인 */
+        .create-folder-container {
+            text-align: center;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 40px;
+        }
+        #folderNameInput {
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            width: 250px;
+            margin-right: 10px;
+            outline: none;
+        }
+        #folderNameInput:focus {
+            border-color: #4CAF50;
+        }
+        .btn {
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        /* 개별 폴더 영역 디자인 */
+        .folder-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+            animation: slideDown 0.4s ease-out;
+        }
+        .folder-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .folder-header h2 {
+            margin: 0;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        /* 삭제 버튼 (폴더 삭제용) */
+        .delete-folder-btn {
+            background-color: #ff3b30;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .delete-folder-btn:hover { background-color: #d32f2f; }
+
+        /* 각 폴더 안의 갤러리 영역 */
+        .folder-gallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        /* 📸 사진 카드 및 삭제 버튼 디자인 */
+        .photo-card {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            animation: fadeIn 0.4s ease-in;
+            background-color: #fafafa;
+        }
+        .photo-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .photo-card:hover img {
+            transform: scale(1.05);
+        }
+        
+        /* 삭제 버튼 (사진 삭제용) */
+        .delete-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: rgba(255, 59, 48, 0.85);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        .delete-btn:hover { background-color: rgb(255, 59, 48); }
+        .photo-card:hover .delete-btn { opacity: 1; }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>내 사진 정리함 🗂️</h1>
+        <p>폴더를 만들고 그 안에 사진을 보관해 보세요. (새로고침해도 유지됩니다!)</p>
+        <p class="warning-text">※ 브라우저 저장 공간 한계(약 5MB)로 인해 고화질 사진을 많이 올리면 저장이 안 될 수 있습니다.</p>
+    </div>
+
+    <div class="create-folder-container">
+        <input type="text" id="folderNameInput" placeholder="새 폴더 이름 입력">
+        <button class="btn" onclick="handleCreateFolder()">+ 폴더 만들기</button>
+    </div>
+
+    <div id="folders-container"></div>
+
+    <script>
+        // 1. 데이터를 저장할 배열 (로컬 스토리지에서 불러오거나 빈 배열로 시작)
+        let foldersData = JSON.parse(localStorage.getItem('myGalleryData')) || [];
+
+        // 2. 데이터를 로컬 스토리지에 저장하는 함수
+        function saveData() {
+            try {
+                localStorage.setItem('myGalleryData', JSON.stringify(foldersData));
+            } catch (e) {
+                alert('⚠️ 브라우저 저장 공간이 꽉 찼습니다!\n필요 없는 사진이나 폴더를 삭제한 후 다시 시도해 주세요.');
+                // 에러가 나면 데이터가 꼬이지 않게 현재 화면의 상태를 다시 불러옵니다.
+                location.reload(); 
+            }
+        }
+
+        // 3. 페이지가 열릴 때 기존 데이터(폴더와 사진들)를 화면에 그려주는 함수
+        function init() {
+            const container = document.getElementById('folders-container');
+            container.innerHTML = ''; // 초기화
+            
+            foldersData.forEach(folder => {
+                renderFolder(folder);
+            });
+        }
+
+        // 4. 새로운 폴더를 생성하는 함수
+        function handleCreateFolder() {
+            const folderNameInput = document.getElementById('folderNameInput');
+            const folderName = folderNameInput.value.trim() || '새 폴더'; 
+            
+            // 고유한 ID 생성 (현재 시간 활용)
+            const newFolder = {
+                id: 'folder_' + Date.now(),
+                name: folderName,
+                photos: []
+            };
+            
+            foldersData.push(newFolder);
+            saveData(); // 데이터 저장
+            renderFolder(newFolder); // 화면에 그리기
+            
+            folderNameInput.value = ''; 
+        }
+
+        // 5. 폴더 1개를 화면에 만들어주는 함수
+        function renderFolder(folder) {
+            const container = document.getElementById('folders-container');
+            const folderDiv = document.createElement('div');
+            folderDiv.className = 'folder-section';
+            folderDiv.id = folder.id;
+            
+            folderDiv.innerHTML = `
+                <div class="folder-header">
+                    <h2>
+                        📁 ${folder.name} 
+                        <button class="delete-folder-btn" onclick="deleteFolder('${folder.id}')">폴더 삭제</button>
+                    </h2>
+                    <label class="btn">
+                        사진 추가하기
+                        <input type="file" accept="image/*" multiple style="display: none;">
+                    </label>
+                </div>
+                <div class="folder-gallery"></div>
+            `;
+            
+            const fileInput = folderDiv.querySelector('input[type="file"]');
+            const gallery = folderDiv.querySelector('.folder-gallery');
+            
+            // 기존에 저장된 사진들이 있다면 화면에 그리기
+            folder.photos.forEach(photo => {
+                renderPhoto(gallery, folder.id, photo);
+            });
+            
+            // 사진 추가 기능
+            fileInput.addEventListener('change', function(event) {
+                const files = event.target.files;
+                
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (file && file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            const newPhoto = {
+                                id: 'photo_' + Date.now() + Math.random(), // 고유 ID
+                                dataUrl: e.target.result
+                            };
+                            
+                            // 배열에 사진 데이터 추가 후 저장
+                            const targetFolder = foldersData.find(f => f.id === folder.id);
+                            if (targetFolder) {
+                                targetFolder.photos.push(newPhoto);
+                                saveData();
+                                renderPhoto(gallery, folder.id, newPhoto);
+                            }
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                }
+                event.target.value = ''; 
+            });
+            
+            container.appendChild(folderDiv);
+        }
+
+        // 6. 사진 1개를 화면에 만들어주는 함수
+        function renderPhoto(gallery, folderId, photo) {
+            const photoCard = document.createElement('div');
+            photoCard.className = 'photo-card';
+            photoCard.id = photo.id;
+            
+            const imgElement = document.createElement('img');
+            imgElement.src = photo.dataUrl;
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-btn';
+            deleteBtn.innerHTML = '✕';
+            deleteBtn.title = '사진 삭제';
+            
+            // 사진 삭제 기능
+            deleteBtn.onclick = function() {
+                // 화면에서 지우기
+                photoCard.remove(); 
+                
+                // 데이터 배열에서 지우고 저장
+                const targetFolder = foldersData.find(f => f.id === folderId);
+                if (targetFolder) {
+                    targetFolder.photos = targetFolder.photos.filter(p => p.id !== photo.id);
+                    saveData();
+                }
+            };
+            
+            photoCard.appendChild(imgElement);
+            photoCard.appendChild(deleteBtn);
+            gallery.appendChild(photoCard);
+        }
+
+        // 7. 폴더를 통째로 삭제하는 함수
+        function deleteFolder(folderId) {
+            if(confirm('이 폴더와 안에 있는 모든 사진을 정말 삭제하시겠습니까?')) {
+                // 데이터 배열에서 폴더 제외
+                foldersData = foldersData.filter(f => f.id !== folderId);
+                saveData(); // 저장
+                
+                // 화면에서 폴더 지우기
+                const folderDiv = document.getElementById(folderId);
+                if(folderDiv) {
+                    folderDiv.remove();
+                }
+            }
+        }
+
+        // 엔터키로 폴더 생성
+        document.getElementById('folderNameInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleCreateFolder();
+            }
+        });
+
+        // 페이지 로딩 완료 시 초기화 함수 실행
+        window.onload = init;
+    </script>
+</body>
+</html>
